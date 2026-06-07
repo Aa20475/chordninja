@@ -321,7 +321,7 @@ body.dark-theme {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .right-sidebar {

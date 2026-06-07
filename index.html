@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=2">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="dark-theme">
   <!-- Onboarding / Mic Permission Screen -->
@@ -107,6 +108,19 @@
             <div class="feedback-row">
               <span>RMS Level:</span>
               <div class="mini-meter"><div id="rms-bar" class="mini-bar"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-section settings-section">
+          <h2>Cloud Sync (Optional)</h2>
+          <button id="btn-google-auth" class="btn primary-btn font-mono" style="width: 100%; justify-content: center; background-color: var(--accent-purple); color: #080a0f; margin-top: 8px;">
+            Link Google Drive
+          </button>
+          <div class="audio-feedback" style="margin-top: 10px;">
+            <div class="feedback-row">
+              <span>Sync Status:</span>
+              <span id="sync-status" class="status-badge disconnected">Disconnected</span>
             </div>
           </div>
         </div>

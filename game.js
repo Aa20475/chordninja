@@ -1,6 +1,8 @@
 import { CHORDS, TIERS, getSongExamples } from './chords.js?v=4';
 import { AudioEngine } from './audio.js';
 
+const GOOGLE_CLIENT_ID = "1057903077535-e3jpaoq9pqdo5sn8972lo8r68pvkq04a.apps.googleusercontent.com";
+
 class GameController {
   constructor() {
     this.engine = new AudioEngine();
@@ -34,6 +36,13 @@ class GameController {
     this.hitZoneX = 100; // Target hit coordinate in timeline
     this.hitToleranceMs = 200; // +/- 200ms timing window
 
+    // Google Drive Sync States
+    this.accessToken = localStorage.getItem('chordninja_gapi_token') || null;
+    this.gapiFileId = localStorage.getItem('chordninja_gapi_file_id') || null;
+    this.gapiClientId = GOOGLE_CLIENT_ID || '';
+    this.tokenExpiry = null;
+    this.tokenClient = null;
+
     // Key simulated chords (for test/offline capability)
     this.simulatedChord = null;
 
@@ -47,6 +56,7 @@ class GameController {
     this.renderSkillTree();
     this.setTargetChord('Em');
     this.checkAutoStartMic();
+    this.initGoogleDriveState();
     this.startGameLoop();
   }
 
@@ -94,6 +104,11 @@ class GameController {
     this.detectedChordDisplay = document.getElementById('detected-chord-display');
     this.similarityScoreDisplay = document.getElementById('similarity-score-display');
     this.btnPlaySample = document.getElementById('btn-play-sample');
+
+    // Google Auth DOM
+    this.inputClientId = document.getElementById('input-client-id');
+    this.btnGoogleAuth = document.getElementById('btn-google-auth');
+    this.syncStatusBadge = document.getElementById('sync-status');
 
     // Populate initial UI value for hold time
     if (this.sliderHoldTime && this.valHoldTime) {
@@ -217,6 +232,20 @@ class GameController {
         }, 1200);
       }
     });
+
+
+
+    // Google Auth manual Link button trigger
+    if (this.btnGoogleAuth) {
+      this.btnGoogleAuth.addEventListener('click', (e) => {
+        e.currentTarget.blur();
+        if (this.accessToken) {
+          this.unlinkGoogleDrive();
+        } else {
+          this.authenticateGoogle();
+        }
+      });
+    }
 
     const btnCopyDebug = document.getElementById('btn-copy-debug');
     if (btnCopyDebug) {
@@ -495,6 +524,8 @@ class GameController {
 
   saveSRS() {
     localStorage.setItem('chordninja_srs', JSON.stringify(this.srsData));
+    localStorage.setItem('chordninja_srs_timestamp', Date.now().toString());
+    this.saveToCloud();
   }
 
   recordSRSSuccess(chordKey) {
@@ -1071,6 +1102,323 @@ Chroma: ${chromaStr}
     setTimeout(() => {
       this.hitIndicator.classList.remove('active');
     }, 150);
+  }
+
+  // --- GOOGLE DRIVE INTEGRATION ---
+
+  initGoogleDriveState() {
+    if (this.accessToken) {
+      this.updateSyncStatus('connected', 'Linked');
+      this.syncProgressWithDrive();
+    } else {
+      this.updateSyncStatus('disconnected', 'Disconnected');
+    }
+  }
+
+  authenticateGoogle() {
+    if (!this.gapiClientId) {
+      alert("Please enter your Google Client ID in the input field first.");
+      return;
+    }
+
+    this.updateSyncStatus('disconnected', 'Connecting...');
+
+    try {
+      if (!this.tokenClient) {
+        // Initialize GIS Client SDK Token client using user's Client ID
+        this.tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: this.gapiClientId,
+          scope: 'https://www.googleapis.com/auth/drive.file',
+          callback: async (tokenResponse) => {
+            if (tokenResponse.error !== undefined) {
+              console.error("Google Auth error:", tokenResponse);
+              this.updateSyncStatus('disconnected', 'Auth Failed');
+              return;
+            }
+            this.accessToken = tokenResponse.access_token;
+            localStorage.setItem('chordninja_gapi_token', this.accessToken);
+            // GIS tokens live for 3600 seconds (1 hour)
+            this.tokenExpiry = Date.now() + (parseInt(tokenResponse.expires_in) || 3600) * 1000;
+            
+            this.updateSyncStatus('connected', 'Syncing...');
+            await this.syncProgressWithDrive();
+          }
+        });
+      }
+
+      // Trigger OAuth 2.0 Identity consent screen
+      this.tokenClient.requestAccessToken({ prompt: 'consent' });
+    } catch (err) {
+      console.error("Failed to initialize Google Token Client:", err);
+      this.updateSyncStatus('disconnected', 'Setup Failed');
+      alert("Error initializing Google Identity Services. Check your Client ID format.");
+    }
+  }
+
+  async syncProgressWithDrive() {
+    if (!this.accessToken) return;
+
+    try {
+      // Find files named "chordninja_save.json" in Drive
+      const response = await fetch(
+        'https://www.googleapis.com/drive/v3/files?q=name="chordninja_save.json" and trashed=false',
+        {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired or invalid
+          this.unlinkGoogleDrive();
+          this.updateSyncStatus('disconnected', 'Session Expired');
+          return;
+        }
+        throw new Error("Failed to search Drive files");
+      }
+
+      const searchResult = await response.json();
+      
+      if (searchResult.files && searchResult.files.length > 0) {
+        const cloudFile = searchResult.files[0];
+        this.gapiFileId = cloudFile.id;
+        localStorage.setItem('chordninja_gapi_file_id', this.gapiFileId);
+        await this.loadFromCloud(this.gapiFileId);
+      } else {
+        // No save file found in Google Drive
+        let startFresh = false;
+        const hasLocalProgress = this.score > 0 || Object.values(this.srsData).some(d => d.mastery > 0);
+        
+        if (hasLocalProgress) {
+          const keepLocal = confirm("No save file found in Google Drive!\n\nClick 'OK' to upload your current local progress to Google Drive.\nClick 'Cancel' to start fresh (this will reset your scores and mastery progress).");
+          if (!keepLocal) {
+            startFresh = true;
+          }
+        }
+
+        if (startFresh) {
+          this.resetLocalProgressState();
+        }
+        await this.createCloudSaveFile();
+      }
+    } catch (err) {
+      console.error("Error during Google Drive sync:", err);
+      this.updateSyncStatus('connected', 'Sync Error');
+    }
+  }
+
+  resetLocalProgressState() {
+    this.score = 0;
+    this.scoreDisplay.textContent = '0000';
+    this.streak = 1;
+    this.streakDisplay.textContent = 'x1';
+    
+    // Reset SRS
+    for (const key in this.srsData) {
+      this.srsData[key] = {
+        box: 1,
+        lastPlayed: 0,
+        intervalMs: 15000,
+        mastery: 0
+      };
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('chordninja_srs', JSON.stringify(this.srsData));
+    localStorage.setItem('chordninja_srs_timestamp', Date.now().toString());
+    
+    this.recentClearedChords = [];
+    this.renderSkillTree();
+    this.setTargetChord(this.currentChordKey);
+    this.showPopupNotification("Progress reset successfully!");
+  }
+
+  async createCloudSaveFile() {
+    if (!this.accessToken) return;
+
+    this.updateSyncStatus('connected', 'Creating Save...');
+    
+    const metadata = {
+      name: 'chordninja_save.json',
+      mimeType: 'application/json'
+    };
+
+    const saveData = {
+      srs: this.srsData,
+      score: this.score,
+      streak: this.streak,
+      holdTime: this.dojoResonanceTime / 1000,
+      timestamp: Date.now()
+    };
+
+    try {
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([JSON.stringify(saveData)], { type: 'application/json' }));
+
+      const response = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`
+          },
+          body: form
+        }
+      );
+
+      if (!response.ok) throw new Error("Google Drive file creation failed");
+
+      const resData = await response.json();
+      this.gapiFileId = resData.id;
+      localStorage.setItem('chordninja_gapi_file_id', this.gapiFileId);
+      this.updateSyncStatus('connected', 'Synced');
+    } catch (err) {
+      console.error("Failed to create save file in Google Drive:", err);
+      this.updateSyncStatus('connected', 'Create Failed');
+    }
+  }
+
+  async saveToCloud() {
+    // If not connected to Google Drive, do nothing (regular guest mode)
+    if (!this.accessToken || !this.gapiFileId) return;
+
+    // Check expiry
+    if (this.tokenExpiry && Date.now() > this.tokenExpiry) {
+      this.updateSyncStatus('disconnected', 'Session Expired');
+      return;
+    }
+
+    const saveData = {
+      srs: this.srsData,
+      score: this.score,
+      streak: this.streak,
+      holdTime: this.dojoResonanceTime / 1000,
+      timestamp: Date.now()
+    };
+
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${this.gapiFileId}?uploadType=media`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(saveData)
+        }
+      );
+
+      if (!response.ok) throw new Error("Upload failed");
+      this.updateSyncStatus('connected', 'Synced');
+    } catch (err) {
+      console.warn("Background cloud sync lagged:", err);
+      this.updateSyncStatus('connected', 'Sync Lagged');
+    }
+  }
+
+  async loadFromCloud(fileId) {
+    if (!this.accessToken) return;
+
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error("File content read failed");
+      const cloudData = await response.json();
+
+      const localTS = parseInt(localStorage.getItem('chordninja_srs_timestamp') || '0');
+      const cloudTS = cloudData.timestamp || 0;
+
+      if (cloudTS > localTS) {
+        if (confirm("Newer progress found in Google Drive! Load from cloud? (This updates your scores and chord masteries)")) {
+          this.applyCloudData(cloudData);
+        } else {
+          // Keep local progress and force update cloud file
+          await this.saveToCloud();
+        }
+      } else if (localTS > cloudTS) {
+        // Local is newer, update cloud save in background
+        await this.saveToCloud();
+      } else {
+        // Timestamps align, load progress
+        this.applyCloudData(cloudData);
+      }
+    } catch (err) {
+      console.error("Failed to read cloud save data:", err);
+      this.updateSyncStatus('connected', 'Load Failed');
+    }
+  }
+
+  applyCloudData(cloudData) {
+    if (cloudData.srs) {
+      this.srsData = cloudData.srs;
+      localStorage.setItem('chordninja_srs', JSON.stringify(this.srsData));
+      if (cloudData.timestamp) {
+        localStorage.setItem('chordninja_srs_timestamp', cloudData.timestamp.toString());
+      }
+    }
+    if (cloudData.score !== undefined) {
+      this.score = cloudData.score;
+      this.scoreDisplay.textContent = this.score.toString().padStart(4, '0');
+    }
+    if (cloudData.streak !== undefined) {
+      this.streak = cloudData.streak;
+      this.streakDisplay.textContent = `x${this.streak}`;
+    }
+    if (cloudData.holdTime !== undefined) {
+      this.dojoResonanceTime = cloudData.holdTime * 1000;
+      if (this.sliderHoldTime && this.valHoldTime) {
+        this.sliderHoldTime.value = cloudData.holdTime;
+        this.valHoldTime.textContent = `${cloudData.holdTime.toFixed(1)}s`;
+      }
+    }
+
+    this.renderSkillTree();
+    this.setTargetChord(this.currentChordKey);
+    this.updateSyncStatus('connected', 'Synced');
+  }
+
+  updateSyncStatus(state, message) {
+    if (!this.syncStatusBadge) return;
+    
+    this.syncStatusBadge.textContent = message;
+
+    if (state === 'connected') {
+      this.syncStatusBadge.className = 'status-badge connected';
+      if (this.btnGoogleAuth) {
+        this.btnGoogleAuth.textContent = 'Unlink Drive';
+        this.btnGoogleAuth.style.backgroundColor = 'var(--danger-color)';
+      }
+    } else {
+      this.syncStatusBadge.className = 'status-badge disconnected';
+      if (this.btnGoogleAuth) {
+        this.btnGoogleAuth.textContent = 'Link Google Drive';
+        this.btnGoogleAuth.style.backgroundColor = 'var(--accent-purple)';
+      }
+    }
+  }
+
+  unlinkGoogleDrive() {
+    this.accessToken = null;
+    this.gapiFileId = null;
+    this.tokenExpiry = null;
+    this.tokenClient = null;
+
+    localStorage.removeItem('chordninja_gapi_token');
+    localStorage.removeItem('chordninja_gapi_file_id');
+    
+    this.updateSyncStatus('disconnected', 'Disconnected');
+    this.showPopupNotification("Google Drive unlinked. (Guest mode active)");
   }
 }
 
