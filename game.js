@@ -1,5 +1,5 @@
 import { CHORDS, TIERS, getSongExamples } from './chords.js?v=4';
-import { AudioEngine } from './audio.js';
+import { AudioEngine } from './audio.js?v=4';
 
 const GOOGLE_CLIENT_ID = "1057903077535-e3jpaoq9pqdo5sn8972lo8r68pvkq04a.apps.googleusercontent.com";
 

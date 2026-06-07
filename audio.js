@@ -13,6 +13,10 @@ export class AudioEngine {
     // Sensitivity thresholds
     this.rmsThreshold = 0.015; // Minimum volume level to register guitar playing (1.5% amplitude)
     this.chromaThreshold = 0.05; // Minimum peak strength in chroma to count
+
+    // Detection lockout when playing reference audio sample
+    this.isSamplePlaying = false;
+    this.samplePlayTimeout = null;
   }
 
   async init() {
@@ -83,8 +87,8 @@ export class AudioEngine {
     // Hysteresis noise gate: lower threshold if already matching to allow decay sustain
     const gateThreshold = wasActive ? (this.rmsThreshold * 0.55) : this.rmsThreshold;
 
-    // If signal is below noise threshold, return silent state
-    if (rms < gateThreshold) {
+    // If signal is below noise threshold or a reference sample is playing, return silent state
+    if (rms < gateThreshold || this.isSamplePlaying) {
       return {
         active: true,
         rms,
@@ -187,6 +191,10 @@ export class AudioEngine {
 
     console.log("Play Sample - Chord Key:", chordKey, "Frets:", chord.frets);
 
+    // Disable chord detection during sample playback to avoid self-detection
+    this.isSamplePlaying = true;
+    if (this.samplePlayTimeout) clearTimeout(this.samplePlayTimeout);
+
     // Ensure audio context exists (even if microphone is not allowed/ready)
     if (!this.audioContext) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -242,6 +250,12 @@ export class AudioEngine {
         delay += 0.065; // 65ms strum offset
       }
     });
+
+    // Reset detection lockout after sample strum and decay completes (~2.5s total)
+    const lockoutMs = (delay + 2.5) * 1000;
+    this.samplePlayTimeout = setTimeout(() => {
+      this.isSamplePlaying = false;
+    }, lockoutMs);
   }
 
   createOvertone(freq, noteTime, peakGain, type, destination) {
