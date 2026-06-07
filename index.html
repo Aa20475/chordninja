@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChordNinja - Acoustic Guitar Chord Arcade & Dojo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body class="dark-theme">
+  <!-- Onboarding / Mic Permission Screen -->
+  <div id="onboarding-overlay" class="overlay">
+    <div class="glass-card onboarding-card">
+      <div class="brand">
+        <span class="logo-icon">🥷</span>
+        <h1>CHORDNINJA</h1>
+      </div>
+      <p class="subtitle">Learn guitar chords through real-time audio analysis. Zero extra hardware needed—just your acoustic guitar and laptop microphone.</p>
+      
+      <div class="permissions-step">
+        <button id="btn-request-mic" class="btn primary-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          Enable Microphone
+        </button>
+        <p class="small-text">Ensure your room is reasonably quiet. Position your guitar close to the computer microphone.</p>
+      </div>
+
+      <div id="mic-test-area" class="hidden">
+        <h3>Calibrating Audio...</h3>
+        <div class="calibration-row">
+          <div class="meter-label">Volume Level:</div>
+          <div class="meter-bar-container">
+            <div id="mic-level-bar" class="meter-bar" style="width: 0%"></div>
+          </div>
+        </div>
+        <button id="btn-start-game" class="btn success-btn hidden">Enter Dojo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Top Bar -->
+    <header class="app-header glass-panel">
+      <div class="header-left">
+        <div class="logo">Chord<span>Ninja</span> 🥷</div>
+        <div class="tier-badge" id="current-tier-display">Tier 1: The Training Wheels</div>
+      </div>
+      
+      <div class="header-center">
+        <div class="mode-tabs">
+          <button id="tab-dojo" class="tab-btn active">Dojo (Learn)</button>
+          <button id="tab-arcade" class="tab-btn">Arcade (Rhythm)</button>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="stat-box">
+          <span class="stat-label">SCORE</span>
+          <span id="score-display" class="stat-value font-mono">0000</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">STREAK</span>
+          <span id="streak-display" class="stat-value font-mono">x1</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Left Sidebar: Skill Tree & Settings -->
+      <aside class="sidebar glass-panel">
+        <div class="sidebar-section">
+          <h2>Skill Progression</h2>
+          <div class="skill-tree">
+            <!-- Dynamically populated from chords.js TIERS -->
+          </div>
+        </div>
+
+        <div class="sidebar-section settings-section">
+          <h2>Engine & Settings</h2>
+          <div class="setting-item">
+            <label for="slider-sensitivity">Mic Threshold (Noise Floor)</label>
+            <input type="range" id="slider-sensitivity" min="5" max="80" value="15">
+            <div class="setting-value" id="val-sensitivity">15%</div>
+          </div>
+          
+          <div class="setting-item dojo-only">
+            <label for="slider-hold-time">Dojo Hold Time</label>
+            <input type="range" id="slider-hold-time" min="1.0" max="4.0" step="0.5" value="1.5">
+            <div class="setting-value" id="val-hold-time">1.5s</div>
+          </div>
+          
+          <div class="setting-item arcade-only hidden">
+            <label for="slider-bpm">Arcade Metronome BPM</label>
+            <input type="range" id="slider-bpm" min="40" max="120" value="60">
+            <div class="setting-value" id="val-bpm">60 BPM</div>
+          </div>
+
+          <div class="audio-feedback">
+            <div class="feedback-row">
+              <span>Input:</span>
+              <span id="audio-input-status" class="status-badge disconnected">Muted</span>
+            </div>
+            <div class="feedback-row">
+              <span>RMS Level:</span>
+              <div class="mini-meter"><div id="rms-bar" class="mini-bar"></div></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Stage: Timelines & Targets -->
+      <section class="center-stage glass-panel">
+        
+        <!-- Dojo Display Mode -->
+        <div id="dojo-stage" class="stage-mode">
+          <div class="dojo-instruction">
+            <h2>Dojo Training</h2>
+            <p>Strum and hold the chord cleanly for <span class="highlight">1.5 seconds</span> to unlock the next challenge.</p>
+          </div>
+          
+          <div class="dojo-chord-display">
+            <div class="huge-chord" id="dojo-target-chord">Em</div>
+            <div class="chord-long-name" id="dojo-target-chord-name">E Minor</div>
+          </div>
+
+          <div class="resonance-tracker">
+            <div class="tracker-label">Resonance Match: <span id="resonance-pct">0%</span></div>
+            <div class="resonance-progress-container">
+              <div id="resonance-progress-bar" class="resonance-progress-bar" style="width: 0%"></div>
+            </div>
+            <div class="strum-hint" id="strum-prompt">Waiting for sound...</div>
+          </div>
+        </div>
+
+        <!-- Arcade Display Mode -->
+        <div id="arcade-stage" class="stage-mode hidden">
+          <div class="arcade-timeline-container">
+            <div class="hit-zone">
+              <div class="hit-line"></div>
+              <div class="hit-indicator" id="hit-indicator">HIT</div>
+            </div>
+            
+            <div class="scrolling-track" id="scrolling-track">
+              <!-- Dynamically populated moving target chord bubbles -->
+            </div>
+          </div>
+
+          <div class="metronome-bar-container">
+            <div id="metronome-visual" class="metronome-light"></div>
+            <div class="metronome-helper-text">Strum exactly when the chord hits the vertical timing target!</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Right Sidebar: Chromagram Visualizer -->
+      <aside class="right-sidebar glass-panel">
+        <h2>Chroma Profile</h2>
+        <p class="section-desc">Real-time intensity of the 12 chromatic pitches.</p>
+        
+        <div class="chromagram-visualizer">
+          <!-- 12 pitch bars -->
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-0" style="height: 0%"></div><span class="chroma-label">C</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-1" style="height: 0%"></div><span class="chroma-label">C#</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-2" style="height: 0%"></div><span class="chroma-label">D</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-3" style="height: 0%"></div><span class="chroma-label">D#</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-4" style="height: 0%"></div><span class="chroma-label">E</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-5" style="height: 0%"></div><span class="chroma-label">F</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-6" style="height: 0%"></div><span class="chroma-label">F#</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-7" style="height: 0%"></div><span class="chroma-label">G</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-8" style="height: 0%"></div><span class="chroma-label">G#</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-9" style="height: 0%"></div><span class="chroma-label">A</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-10" style="height: 0%"></div><span class="chroma-label">A#</span></div>
+          <div class="chroma-bar-wrapper"><div class="chroma-bar" id="chroma-bin-11" style="height: 0%"></div><span class="chroma-label">B</span></div>
+        </div>
+
+        <div class="detected-notes-box">
+          <div class="detected-label">Engine Detection:</div>
+          <div id="detected-chord-display" class="detected-value">None</div>
+          <div id="similarity-score-display" class="detected-sub">Confidence: 0.00</div>
+        </div>
+
+        <!-- Debug Log Panel -->
+        <div class="debug-panel-box glass-panel">
+          <div style="font-weight: bold; color: var(--accent-purple); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+            <span>🎛️ DSP DEBUG LOGGER</span>
+            <button id="btn-copy-debug" class="btn font-mono" style="padding: 2px 8px; font-size: 0.65rem; background-color: rgba(255,255,255,0.05); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.1);">Copy Log</button>
+          </div>
+          <textarea id="debug-log-output" readonly></textarea>
+          <div style="font-size: 0.6rem; color: var(--text-muted); flex-shrink: 0;">Strum your guitar to log real-time FFT/Chroma data here.</div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Bottom Module: Interactive Fretboard or Flashcard -->
+    <footer class="bottom-panel glass-panel">
+      <div class="bottom-header">
+        <div class="module-title" id="recall-title">Fretboard Diagram</div>
+        
+        <div class="view-controls">
+          <button id="btn-play-sample" class="btn primary-btn font-mono" style="padding: 6px 12px; font-size: 0.8rem; box-shadow: none; background-color: var(--accent-purple); color: #080a0f;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            Play Sample
+          </button>
+          <span class="hotkey-label">Active Recall View Toggle:</span>
+          <button id="toggle-recall" class="btn action-btn font-mono">
+            <span class="view-btn-text">Switch to Flashcard</span> <kbd class="kbd-key">Space</kbd>
+          </button>
+        </div>
+      </div>
+
+      <!-- Fretboard View Container -->
+      <div id="fretboard-view-container" class="module-view active">
+        <div class="fretboard-wrapper">
+          <canvas id="fretboard-canvas" width="850" height="240"></canvas>
+        </div>
+      </div>
+
+      <!-- Flashcard View Container -->
+      <div id="flashcard-view-container" class="module-view hidden">
+        <div class="flashcard-box">
+          <div class="flashcard-chord" id="flashcard-chord-name">Em</div>
+          <div class="flashcard-hint">Visualize the shape in your mind. Transition muscle memory and play!</div>
+        </div>
+      </div>
+
+      <!-- Song Examples Row -->
+      <div class="song-examples-container">
+        <span class="songs-title">Popular In:</span>
+        <div id="songs-list" class="songs-list">
+          <!-- Dynamically populated from game.js/chords.js -->
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="game.js?v=4"></script>
+</body>
+</html>
