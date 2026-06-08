@@ -865,6 +865,12 @@ Chroma: ${chromaStr}
         this.dojoStage.style.animation = 'hitPulse 0.3s ease-out';
         setTimeout(() => { this.dojoStage.style.animation = ''; }, 300);
 
+        // Spawn clearance rewards particles & text
+        const rect = this.dojoStage.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2 - 40;
+        this.triggerClearJuice(centerX, centerY, `+100 x${this.streak}`);
+
         if (!this.dojoHelped) {
           this.recordSRSSuccess(this.currentChordKey);
           this.checkProgressionUnlock();
@@ -1083,6 +1089,17 @@ Chroma: ${chromaStr}
     this.streakDisplay.textContent = `x${this.streak}`;
 
     this.flashHitIndicator(text, color);
+
+    // Spawn clearance rewards particles & text in Arcade Mode
+    let centerX = window.innerWidth / 2;
+    let centerY = window.innerHeight / 2;
+    if (target.element) {
+      const rect = target.element.getBoundingClientRect();
+      centerX = rect.left + rect.width / 2;
+      centerY = rect.top + rect.height / 2;
+    }
+    this.triggerClearJuice(centerX, centerY, `+${calculatedPoints}`);
+
     this.recordSRSSuccess(target.chord);
     this.checkProgressionUnlock();
 
@@ -1419,6 +1436,107 @@ Chroma: ${chromaStr}
     
     this.updateSyncStatus('disconnected', 'Disconnected');
     this.showPopupNotification("Google Drive unlinked. (Guest mode active)");
+  }
+
+  // physics-based particle system, floating text and numeric popup pop bounce feedback emission
+  triggerClearJuice(x, y, textVal = '+100') {
+    // 1. Create Floating text popup (slowed to 1.5s)
+    const floatText = document.createElement('div');
+    floatText.className = 'juice-floating-text';
+    floatText.textContent = textVal;
+    floatText.style.left = `${x}px`;
+    floatText.style.top = `${y}px`;
+    document.body.appendChild(floatText);
+    setTimeout(() => floatText.remove(), 1500);
+
+    // 2. Create Shockwave expanding ring ripple (slowed to 1.2s)
+    const shockwave = document.createElement('div');
+    shockwave.className = 'juice-shockwave';
+    shockwave.style.left = `${x}px`;
+    shockwave.style.top = `${y}px`;
+    document.body.appendChild(shockwave);
+    setTimeout(() => shockwave.remove(), 1200);
+
+    // 3. Score & Streak numeric spring pop-bounce triggers
+    const headerScore = document.getElementById('score-display');
+    const headerStreak = document.getElementById('streak-display');
+    
+    if (headerScore) {
+      headerScore.classList.remove('pop-bounce');
+      void headerScore.offsetWidth; // force browser layout recalculation
+      headerScore.classList.add('pop-bounce');
+    }
+    if (headerStreak) {
+      headerStreak.classList.remove('pop-bounce');
+      void headerStreak.offsetWidth; // force browser layout recalculation
+      headerStreak.classList.add('pop-bounce');
+    }
+
+    // 4. Erupt neon spark particles (made floatier and slower)
+    const particleCount = 38;
+    const colors = ['#00ffc4', '#c07cf7', '#ff3366', '#ffd700', '#00e676'];
+    const particles = [];
+
+    for (let i = 0; i < particleCount; i++) {
+      const particle = document.createElement('div');
+      particle.className = 'juice-particle';
+      
+      const size = 4 + Math.random() * 8;
+      particle.style.width = `${size}px`;
+      particle.style.height = `${size}px`;
+      
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      particle.style.background = color;
+      particle.style.boxShadow = `0 0 12px ${color}, 0 0 4px ${color}`;
+      particle.style.left = `${x}px`;
+      particle.style.top = `${y}px`;
+      
+      document.body.appendChild(particle);
+
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.2 + Math.random() * 3.8; // cut speeds in half
+      
+      particles.push({
+        element: particle,
+        px: x,
+        py: y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 1.2, // slight upward ejection bias
+        alpha: 1.0,
+        decay: 0.005 + Math.random() * 0.007 // slower decay for longer lifetime
+      });
+    }
+
+    // Physics Animation Loop
+    const tick = () => {
+      let active = false;
+      particles.forEach(p => {
+        if (p.alpha <= 0) return;
+        
+        p.px += p.vx;
+        p.py += p.vy;
+        p.vy += 0.22; // apply gravity pull downwards
+        p.vx *= 0.96; // apply horizontal drag
+        p.vy *= 0.96; // apply vertical drag
+        
+        p.alpha -= p.decay; // fade particle
+        
+        p.element.style.transform = `translate(${p.px - x}px, ${p.py - y}px)`;
+        p.element.style.opacity = p.alpha;
+        
+        if (p.alpha > 0) {
+          active = true;
+        } else {
+          p.element.remove();
+        }
+      });
+
+      if (active) {
+        requestAnimationFrame(tick);
+      }
+    };
+
+    requestAnimationFrame(tick);
   }
 }
 
