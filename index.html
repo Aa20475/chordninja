@@ -6,8 +6,8 @@
   <title>ChordNinja - Acoustic Guitar Chord Arcade & Dojo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=15">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="dark-theme">
@@ -116,6 +116,7 @@
           </div>
         </div>
       </aside>
+      <div id="resize-left" class="resize-handle vertical"></div>
 
       <!-- Center Stage: Timelines & Targets -->
       <section class="center-stage glass-panel">
@@ -161,6 +162,7 @@
         </div>
 
       </section>
+      <div id="resize-right" class="resize-handle vertical"></div>
 
       <!-- Right Sidebar: Chromagram Visualizer -->
       <aside class="right-sidebar glass-panel">
@@ -198,8 +200,8 @@
           <textarea id="debug-log-output" readonly></textarea>
           <div style="font-size: 0.6rem; color: var(--text-muted); flex-shrink: 0;">Strum your guitar to log real-time FFT/Chroma data here.</div>
         </div>
-      </aside>
     </main>
+    <div id="resize-bottom" class="resize-handle horizontal"></div>
 
     <!-- Bottom Module: Interactive Fretboard or Flashcard -->
     <footer class="bottom-panel glass-panel">
@@ -243,6 +245,6 @@
     </footer>
   </div>
 
-  <script type="module" src="game.js?v=10"></script>
+  <script type="module" src="game.js?v=15"></script>
 </body>
 </html>

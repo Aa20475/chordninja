@@ -1,5 +1,5 @@
-import { CHORDS, TIERS, getSongExamples } from './chords.js?v=10';
-import { AudioEngine } from './audio.js?v=10';
+import { CHORDS, TIERS, getSongExamples } from './chords.js?v=15';
+import { AudioEngine } from './audio.js?v=15';
 
 const GOOGLE_CLIENT_ID = "1057903077535-e3jpaoq9pqdo5sn8972lo8r68pvkq04a.apps.googleusercontent.com";
 
@@ -58,6 +58,7 @@ class GameController {
     this.checkAutoStartMic();
     this.initGoogleDriveState();
     this.startGameLoop();
+    this.resizer = new PanelResizer();
   }
 
   initDOM() {
@@ -426,7 +427,7 @@ class GameController {
       // String note letters at left of nut
       const standardTuning = ["e", "B", "G", "D", "A", "E"]; // high to low
       this.ctx.fillStyle = '#8d98af';
-      this.ctx.font = 'bold 14px Outfit';
+      this.ctx.font = 'bold 14px Geist';
       this.ctx.textAlign = 'right';
       this.ctx.fillText(standardTuning[s], padLeft - 45, y + 5);
     }
@@ -444,7 +445,7 @@ class GameController {
 
       if (fret === -1) {
         // Muted string (X)
-        this.ctx.strokeStyle = '#ff3366';
+        this.ctx.strokeStyle = '#ffb3ae';
         this.ctx.lineWidth = 3;
         this.ctx.beginPath();
         this.ctx.moveTo(padLeft - 22, y - 6);
@@ -454,7 +455,7 @@ class GameController {
         this.ctx.stroke();
       } else if (fret === 0) {
         // Open string (O)
-        this.ctx.strokeStyle = '#00ffc4';
+        this.ctx.strokeStyle = '#cdbdff';
         this.ctx.lineWidth = 3;
         this.ctx.beginPath();
         this.ctx.arc(padLeft - 16, y, 6, 0, Math.PI * 2);
@@ -464,27 +465,27 @@ class GameController {
         const x = padLeft + (fret - 0.5) * fretSpacing;
         
         // Draw glow
-        this.ctx.fillStyle = 'rgba(0, 255, 196, 0.4)';
+        this.ctx.fillStyle = 'rgba(124, 77, 255, 0.4)';
         this.ctx.beginPath();
         this.ctx.arc(x, y, 18, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Draw note dot
-        this.ctx.fillStyle = '#00ffc4';
+        this.ctx.fillStyle = '#7c4dff';
         this.ctx.beginPath();
         this.ctx.arc(x, y, 13, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Draw finger number inside dot
-        this.ctx.fillStyle = '#080a0f';
-        this.ctx.font = 'bold 12px Space Mono';
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 12px JetBrains Mono';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(finger.toString(), x, y);
 
         // Note labels above/below dots to help learn theory
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '10px Space Mono';
+        this.ctx.fillStyle = '#e4e1e6';
+        this.ctx.font = '10px JetBrains Mono';
         this.ctx.fillText(noteName, x, y - 22);
       }
     }
@@ -1553,6 +1554,120 @@ Chroma: ${chromaStr}
     };
 
     requestAnimationFrame(tick);
+  }
+}
+
+class PanelResizer {
+  constructor() {
+    this.leftHandle = document.getElementById('resize-left');
+    this.rightHandle = document.getElementById('resize-right');
+    this.bottomHandle = document.getElementById('resize-bottom');
+
+    // Limits
+    this.minSidebarWidth = 220;
+    this.maxSidebarWidth = 650;
+    this.minBottomHeight = 200;
+    this.maxBottomHeight = 750;
+
+    this.init();
+  }
+
+  init() {
+    if (this.leftHandle) {
+      this.setupDrag(this.leftHandle, 'left');
+    }
+    if (this.rightHandle) {
+      this.setupDrag(this.rightHandle, 'right');
+    }
+    if (this.bottomHandle) {
+      this.setupDrag(this.bottomHandle, 'bottom');
+    }
+  }
+
+  setupDrag(handle, direction) {
+    const onMouseDown = (e) => {
+      e.preventDefault();
+      handle.classList.add('resizing');
+      document.body.style.cursor = direction === 'bottom' ? 'row-resize' : 'col-resize';
+      
+      const startX = e.clientX;
+      const startY = e.clientY;
+      
+      const startWidthLeft = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-left-width')) || 320;
+      const startWidthRight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-right-width')) || 320;
+      const startHeightBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--bottom-panel-height')) || 360;
+
+      const onMouseMove = (moveEvent) => {
+        if (direction === 'left') {
+          const deltaX = moveEvent.clientX - startX;
+          const newWidth = Math.max(this.minSidebarWidth, Math.min(this.maxSidebarWidth, startWidthLeft + deltaX));
+          document.documentElement.style.setProperty('--sidebar-left-width', `${newWidth}px`);
+        } else if (direction === 'right') {
+          const deltaX = startX - moveEvent.clientX;
+          const newWidth = Math.max(this.minSidebarWidth, Math.min(this.maxSidebarWidth, startWidthRight + deltaX));
+          document.documentElement.style.setProperty('--sidebar-right-width', `${newWidth}px`);
+        } else if (direction === 'bottom') {
+          const deltaY = startY - moveEvent.clientY;
+          const newHeight = Math.max(this.minBottomHeight, Math.min(this.maxBottomHeight, startHeightBottom + deltaY));
+          document.documentElement.style.setProperty('--bottom-panel-height', `${newHeight}px`);
+          window.dispatchEvent(new Event('resize'));
+        }
+      };
+
+      const onMouseUp = () => {
+        handle.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    };
+
+    handle.addEventListener('mousedown', onMouseDown);
+    
+    // Touch support
+    const onTouchStart = (e) => {
+      if (e.touches.length !== 1) return;
+      handle.classList.add('resizing');
+      
+      const startX = e.touches[0].clientX;
+      const startY = e.touches[0].clientY;
+      
+      const startWidthLeft = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-left-width')) || 320;
+      const startWidthRight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-right-width')) || 320;
+      const startHeightBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--bottom-panel-height')) || 360;
+
+      const onTouchMove = (moveEvent) => {
+        if (moveEvent.touches.length !== 1) return;
+        if (direction === 'left') {
+          const deltaX = moveEvent.touches[0].clientX - startX;
+          const newWidth = Math.max(this.minSidebarWidth, Math.min(this.maxSidebarWidth, startWidthLeft + deltaX));
+          document.documentElement.style.setProperty('--sidebar-left-width', `${newWidth}px`);
+        } else if (direction === 'right') {
+          const deltaX = startX - moveEvent.touches[0].clientX;
+          const newWidth = Math.max(this.minSidebarWidth, Math.min(this.maxSidebarWidth, startWidthRight + deltaX));
+          document.documentElement.style.setProperty('--sidebar-right-width', `${newWidth}px`);
+        } else if (direction === 'bottom') {
+          const deltaY = startY - moveEvent.touches[0].clientY;
+          const newHeight = Math.max(this.minBottomHeight, Math.min(this.maxBottomHeight, startHeightBottom + deltaY));
+          document.documentElement.style.setProperty('--bottom-panel-height', `${newHeight}px`);
+          window.dispatchEvent(new Event('resize'));
+        }
+      };
+
+      const onTouchEnd = () => {
+        handle.classList.remove('resizing');
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchEnd);
+      };
+
+      document.addEventListener('touchmove', onTouchMove, { passive: true });
+      document.addEventListener('touchend', onTouchEnd);
+    };
+
+    handle.addEventListener('touchstart', onTouchStart, { passive: true });
   }
 }
 

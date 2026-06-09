@@ -1,21 +1,25 @@
-/* ChordNinja Custom Theme stylesheet */
 :root {
-  --bg-color: #0c0e14;
-  --panel-bg: rgba(22, 28, 41, 0.45);
-  --panel-border: rgba(255, 255, 255, 0.07);
-  --accent-color: #00ffc4;
-  --accent-hover: #00cca2;
-  --accent-purple: #c07cf7;
-  --accent-purple-glow: rgba(192, 124, 247, 0.3);
-  --accent-glow: rgba(0, 255, 196, 0.25);
-  --text-primary: #f1f3f9;
-  --text-muted: #8d98af;
-  --success-color: #00e676;
-  --success-glow: rgba(0, 230, 118, 0.3);
-  --danger-color: #ff3366;
+  --bg-color: #131316;
+  --panel-bg: rgba(31, 31, 34, 0.45);
+  --panel-border: rgba(148, 142, 161, 0.12);
+  --accent-color: #cdbdff;
+  --accent-hover: #bdaeff;
+  --accent-purple: #7c4dff;
+  --accent-purple-glow: rgba(124, 77, 255, 0.3);
+  --accent-glow: rgba(205, 189, 255, 0.25);
+  --text-primary: #e4e1e6;
+  --text-muted: #cac3d8;
+  --success-color: #cdbdff;
+  --success-glow: rgba(205, 189, 255, 0.3);
+  --danger-color: #ffb3ae;
   
-  --font-main: 'Outfit', sans-serif;
-  --font-mono: 'Space Mono', monospace;
+  --font-main: 'Geist', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Resizable panel dimensions */
+  --sidebar-left-width: 320px;
+  --sidebar-right-width: 320px;
+  --bottom-panel-height: 360px;
 }
 
 * {
@@ -361,9 +365,36 @@ body.dark-theme {
 .main-content {
   flex-grow: 1;
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
-  gap: 16px;
+  grid-template-columns: var(--sidebar-left-width) 6px 1fr 6px var(--sidebar-right-width);
+  gap: 8px;
   min-height: 0; /* Important for flex child scrolling */
+}
+
+/* Resize Handles */
+.resize-handle {
+  background-color: rgba(255, 255, 255, 0.03);
+  transition: all 0.2s ease;
+  user-select: none;
+  z-index: 100;
+  border-radius: 4px;
+}
+
+.resize-handle:hover,
+.resize-handle.resizing {
+  background-color: var(--accent-purple);
+  box-shadow: 0 0 10px var(--accent-purple-glow);
+}
+
+.resize-handle.vertical {
+  width: 6px;
+  cursor: col-resize;
+  align-self: stretch;
+}
+
+.resize-handle.horizontal {
+  height: 6px;
+  cursor: row-resize;
+  width: 100%;
 }
 
 /* Sidebar Styling */
@@ -373,6 +404,7 @@ body.dark-theme {
   flex-direction: column;
   gap: 20px;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .right-sidebar {
@@ -380,8 +412,9 @@ body.dark-theme {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: hidden;
+  overflow-y: auto;
   height: 100%;
+  min-height: 0;
 }
 
 .debug-panel-box {
@@ -633,6 +666,7 @@ body.dark-theme {
   justify-content: center;
   align-items: center;
   position: relative;
+  min-height: 0;
 }
 
 .stage-mode {
@@ -909,7 +943,7 @@ body.dark-theme {
 
 /* Bottom Module: Fretboard / Flashcard panel */
 .bottom-panel {
-  height: 330px;
+  height: var(--bottom-panel-height);
   padding: 14px 24px;
   display: flex;
   flex-direction: column;
