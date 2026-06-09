@@ -23,6 +23,7 @@ class GameController {
     this.dojoResonanceTime = savedHoldTime ? parseFloat(savedHoldTime) * 1000 : 1500; // default 1.5 seconds target
     this.currentResonancePct = 0;
     this.dojoHelped = false;
+    this.isRecallForcedBySystem = false;
     this.recentClearedChords = [];
     
     // Arcade Specifics
@@ -282,10 +283,13 @@ class GameController {
     if (this.recallMode === 'diagram') {
       this.activateActiveRecall(true);
     } else {
-      // User revealed the diagram - flag as helped (disables SRS progress on this attempt)
-      this.dojoHelped = true;
+      // User revealed the diagram.
+      // Only penalize/flag as helped if this recall was forced by the system.
+      if (this.isRecallForcedBySystem) {
+        this.dojoHelped = true;
+        this.showPopupNotification("Diagram revealed. SRS mastery progress paused!");
+      }
       this.activateActiveRecall(false);
-      this.showPopupNotification("Diagram revealed. SRS mastery progress paused!");
     }
   }
 
@@ -341,8 +345,10 @@ class GameController {
     const srs = this.srsData[chordKey];
     if (srs && srs.mastery > 20) {
       this.activateActiveRecall(true);
+      this.isRecallForcedBySystem = true;
     } else {
       this.activateActiveRecall(false);
+      this.isRecallForcedBySystem = false;
     }
 
     // Render song examples
