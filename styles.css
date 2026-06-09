@@ -274,6 +274,57 @@ body.dark-theme {
   text-shadow: 0 0 8px var(--accent-glow);
 }
 
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.mic-toggle-btn {
+  background: rgba(22, 28, 41, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--danger-color);
+  color: var(--danger-color);
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-family: var(--font-main);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 8px rgba(255, 51, 102, 0.15);
+}
+
+.mic-toggle-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 51, 102, 0.08);
+}
+
+.mic-toggle-btn.active {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  box-shadow: 0 0 12px var(--accent-glow);
+  text-shadow: 0 0 8px var(--accent-glow);
+  animation: mic-pulse 2s infinite ease-in-out;
+}
+
+.mic-toggle-btn.active:hover {
+  background: rgba(0, 255, 196, 0.08);
+}
+
+@keyframes mic-pulse {
+  0%, 100% {
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 255, 196, 0.5);
+  }
+}
+
 .header-right {
   display: flex;
   gap: 16px;

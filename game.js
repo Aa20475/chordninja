@@ -1,5 +1,5 @@
-import { CHORDS, TIERS, getSongExamples } from './chords.js?v=4';
-import { AudioEngine } from './audio.js?v=4';
+import { CHORDS, TIERS, getSongExamples } from './chords.js?v=10';
+import { AudioEngine } from './audio.js?v=10';
 
 const GOOGLE_CLIENT_ID = "1057903077535-e3jpaoq9pqdo5sn8972lo8r68pvkq04a.apps.googleusercontent.com";
 
@@ -63,9 +63,6 @@ class GameController {
   initDOM() {
     this.onboardingOverlay = document.getElementById('onboarding-overlay');
     this.btnRequestMic = document.getElementById('btn-request-mic');
-    this.micTestArea = document.getElementById('mic-test-area');
-    this.micLevelBar = document.getElementById('mic-level-bar');
-    this.btnStartGame = document.getElementById('btn-start-game');
 
     this.tabDojo = document.getElementById('tab-dojo');
     this.tabArcade = document.getElementById('tab-arcade');
@@ -81,6 +78,7 @@ class GameController {
     this.valBpm = document.getElementById('val-bpm');
     this.audioInputStatus = document.getElementById('audio-input-status');
     this.rmsBar = document.getElementById('rms-bar');
+    this.btnToggleMic = document.getElementById('btn-toggle-mic');
 
     this.dojoStage = document.getElementById('dojo-stage');
     this.arcadeStage = document.getElementById('arcade-stage');
@@ -116,6 +114,9 @@ class GameController {
       this.sliderHoldTime.value = seconds;
       this.valHoldTime.textContent = `${seconds.toFixed(1)}s`;
     }
+
+    // Initialize mic toggle button UI
+    this.updateMicToggleUI();
   }
 
   initEvents() {
@@ -125,34 +126,28 @@ class GameController {
       this.engine.playChordSample(this.currentChordKey);
     });
 
+    // Mic toggle button event listener
+    if (this.btnToggleMic) {
+      this.btnToggleMic.addEventListener('click', async (e) => {
+        e.currentTarget.blur();
+        await this.engine.toggleMute();
+        this.updateMicToggleUI();
+      });
+    }
+
     // Microphone onboarding
     this.btnRequestMic.addEventListener('click', async (e) => {
       e.currentTarget.blur();
       try {
-        const success = await this.engine.init();
+        // Temporarily set isMuted to false so init(true) starts the stream fully
+        this.engine.isMuted = false;
+        const success = await this.engine.init(true);
         if (success) {
           localStorage.setItem('chordninja_mic_granted', 'true');
-          this.btnRequestMic.classList.add('hidden');
-          this.micTestArea.classList.remove('hidden');
-          this.audioInputStatus.textContent = 'Active';
-          this.audioInputStatus.className = 'status-badge connected';
-          
-          // Poll mic levels for calibration test
-          const calibrationPoll = setInterval(() => {
-            const state = this.engine.getAudioState();
-            const volumePercent = Math.min(100, state.rms * 500); // Scale for visual feedback
-            this.micLevelBar.style.width = `${volumePercent}%`;
-            
-            if (state.rms > 0.005) {
-              this.btnStartGame.classList.remove('hidden');
-            }
-          }, 50);
-
-          this.btnStartGame.addEventListener('click', (ev) => {
-            ev.currentTarget.blur();
-            clearInterval(calibrationPoll);
-            this.onboardingOverlay.classList.add('hidden');
-          });
+          this.onboardingOverlay.classList.add('hidden');
+          // Mute it immediately after successful onboarding permission check so it releases the tracks and remains muted by default
+          this.engine.mute();
+          this.updateMicToggleUI();
         }
       } catch (err) {
         alert("Microphone access is required for ChordNinja. Please grant permissions.");
@@ -617,13 +612,34 @@ class GameController {
       try {
         const success = await this.engine.init();
         if (success) {
-          this.audioInputStatus.textContent = 'Active';
-          this.audioInputStatus.className = 'status-badge connected';
           this.onboardingOverlay.classList.add('hidden');
           localStorage.setItem('chordninja_mic_granted', 'true');
+          this.updateMicToggleUI();
         }
       } catch (err) {
         console.warn("Failed to auto-start microphone:", err);
+      }
+    }
+  }
+
+  updateMicToggleUI() {
+    if (!this.btnToggleMic) return;
+    const isMuted = this.engine.isMuted;
+    if (isMuted) {
+      this.btnToggleMic.classList.add('muted');
+      this.btnToggleMic.classList.remove('active');
+      this.btnToggleMic.textContent = '🎤 Mic: MUTED';
+      if (this.audioInputStatus) {
+        this.audioInputStatus.textContent = 'Muted';
+        this.audioInputStatus.className = 'status-badge disconnected';
+      }
+    } else {
+      this.btnToggleMic.classList.remove('muted');
+      this.btnToggleMic.classList.add('active');
+      this.btnToggleMic.textContent = '🎤 Mic: ON';
+      if (this.audioInputStatus) {
+        this.audioInputStatus.textContent = 'Active';
+        this.audioInputStatus.className = 'status-badge connected';
       }
     }
   }

@@ -17,13 +17,42 @@ export class AudioEngine {
     // Detection lockout when playing reference audio sample
     this.isSamplePlaying = false;
     this.samplePlayTimeout = null;
+
+    // Mic defaults to muted on startup
+    this.isMuted = true;
+    this.isAcquiring = false;
   }
 
-  async init() {
-    if (this.isInitialized) return true;
-
+  async init(forceAcquireStream = false) {
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
+      if (!this.audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.audioContext = new AudioContextClass();
+      }
+      
+      if (!this.analyser) {
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = this.fftSize;
+        this.analyser.smoothingTimeConstant = 0.6; // Moderate smoothing to stabilize detection
+      }
+
+      this.isInitialized = true;
+
+      if (!this.isMuted || forceAcquireStream) {
+        await this.acquireStream();
+      }
+      return true;
+    } catch (error) {
+      console.error("Error initializing Audio Engine:", error);
+      throw error;
+    }
+  }
+
+  async acquireStream() {
+    if (this.isAcquiring) return;
+    this.isAcquiring = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
@@ -31,21 +60,58 @@ export class AudioEngine {
         }
       });
 
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      this.audioContext = new AudioContextClass();
-      
-      this.analyser = this.audioContext.createAnalyser();
-      this.analyser.fftSize = this.fftSize;
-      this.analyser.smoothingTimeConstant = 0.6; // Moderate smoothing to stabilize detection
+      // If we got muted while waiting for getUserMedia to resolve, stop it immediately!
+      if (this.isMuted) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      this.stream = stream;
+
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+
+      // Disconnect previous microphone if it exists
+      if (this.microphone) {
+        try {
+          this.microphone.disconnect();
+        } catch (e) {}
+      }
 
       this.microphone = this.audioContext.createMediaStreamSource(this.stream);
       this.microphone.connect(this.analyser);
-
-      this.isInitialized = true;
-      return true;
     } catch (error) {
-      console.error("Error initializing Audio Engine:", error);
+      console.error("Error acquiring mic stream:", error);
       throw error;
+    } finally {
+      this.isAcquiring = false;
+    }
+  }
+
+  mute() {
+    this.isMuted = true;
+    if (this.microphone) {
+      try {
+        this.microphone.disconnect();
+      } catch (e) {}
+      this.microphone = null;
+    }
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop());
+      this.stream = null;
+    }
+  }
+
+  async unmute() {
+    this.isMuted = false;
+    if (!this.isInitialized) {
+      await this.init();
+      return;
+    }
+
+    if (!this.stream || this.stream.getTracks().every(t => t.readyState === 'ended')) {
+      await this.acquireStream();
     }
   }
 
@@ -55,7 +121,27 @@ export class AudioEngine {
     this.rmsThreshold = 0.005 + (thresholdPercent / 100) * 0.095;
   }
 
+  async toggleMute() {
+    if (this.isMuted) {
+      await this.unmute();
+    } else {
+      this.mute();
+    }
+    return this.isMuted;
+  }
+
   getAudioState(activeChordKeys = null, wasActive = false) {
+    if (this.isMuted) {
+      return {
+        active: false,
+        rms: 0,
+        chroma: new Array(12).fill(0),
+        detectedChord: null,
+        confidence: 0,
+        frequencies: []
+      };
+    }
+
     if (!this.isInitialized || !this.analyser) {
       return {
         active: false,
